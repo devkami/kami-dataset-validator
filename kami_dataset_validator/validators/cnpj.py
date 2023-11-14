@@ -5,8 +5,6 @@ import httpx
 from kami_logging import benchmark_with, logging_with
 from validate_docbr import CNPJ
 
-from kami_dataset_validator.constants import CNPJ_WEBSERVICES
-
 cnpjapi_logger = logging.getLogger('CNPJ Validator')
 
 
@@ -53,16 +51,58 @@ class CNPJValidator:
 
         return sanitized_cnpj
 
-    def validate(self) -> bool:
+    def validate(self) -> Dict[str, any]:
+        """
+        Validate the CNPJ using the validate_docbr library. without using external APIs.
+
+        Returns:
+            Dict[str, any]: A dictionary containing the validation result.
+        """
+        result = {
+            '' 'cnpj': self.cnpj,
+            'valid': False,
+            'reason': 'Invalid CNPJ.',
+        }
         cnpj_validator = CNPJ()
+        try:
+            if self.cnpj:
+                if self._sanitize_cnpj() and cnpj_validator.validate(
+                    self.sanitized_cnpj
+                ):
+                    result['valid'] = True
+                    result['reason'] = 'Valid CNPJ.'
+            else:
+                result['reason'] = 'Empty CNPJ.'
+        except CNPJValueError as e:
+            result['reason'] = str(e)
+        except Exception as e:
+            result['reason'] = f'An unexpected error occurred: {str(e)}'
 
-        if not cnpj_validator.validate(self.sanitized_cnpj):
-            raise CNPJValueError('The provided CNPJ is not valid.')
+        return result
 
-        return True
+
+CNPJ_WEBSERVICES = {
+    'brasilaberto': {
+        'name': 'Brasil_Aberto',
+        'BASE_URL': 'https://brasilaberto.com/api/v1/cnpj/{}',
+    },
+    'brasilapi': {
+        'name': 'BrasilAPI',
+        'BASE_URL': 'https://brasilapi.com.br/api/cnpj/v1/{}',
+    },
+    'receitaws': {
+        'name': 'ReceitaWS',
+        'BASE_URL': 'https://receitaws.com.br/v1/cnpj/{}',
+    },
+}
 
 
 class CnpjAPI:
+    available_webservices = [
+        str.lower(webservice['name'])
+        for webservice in CNPJ_WEBSERVICES.values()
+    ]
+
     def __init__(
         self,
         cnpj_list: List[str] = [],

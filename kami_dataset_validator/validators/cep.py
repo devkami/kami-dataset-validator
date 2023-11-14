@@ -7,7 +7,7 @@ import httpx
 from kami_logging import benchmark_with, logging_with
 from pyUFbr.baseuf import ufbr
 
-from kami_dataset_validator.constants import CEP_WEBSERVICES, KEY_TRANSLATIONS
+from kami_dataset_validator.constants import KEY_TRANSLATIONS
 
 cepapi_logger = logging.getLogger('Address Validator')
 
@@ -213,6 +213,33 @@ class Address:
 
         return True
 
+    def validate_cep(self) -> Dict[str, any]:
+        """
+        Validate the CEP number without using external API.
+
+        Returns:
+            Dict[str, any]: A dictionary containing the validation result and reason.
+        """
+        result = {
+            'cep': self.cep,
+            'valid': False,
+            'reason': 'Invalid CEP format.',
+        }
+
+        try:
+            if self.cep:
+                if self._sanitize_cep(self.cep):
+                    result['valid'] = True
+                    result['reason'] = 'Valid CEP format.'
+            else:
+                result['reason'] = 'CEP not provided.'
+        except CEPFormatError as e:
+            result['reason'] = str(e)
+        except Exception as e:
+            result['reason'] = f'An unexpected error occurred: {str(e)}'
+
+        return result
+
     def to_dict(self) -> Dict[str, str]:
         """
         Convert Address instance to dictionary with keys in Portuguese.
@@ -237,7 +264,36 @@ class Address:
         return self._translate_keys(address_dict, reverse_translation)
 
 
+CEP_WEBSERVICES = {
+    'viacep': {
+        'name': 'ViaCEP',
+        'BASE_URL': 'https://viacep.com.br/ws/{}/json/',
+        'supports_address': True,
+    },
+    'brasilaberto': {
+        'name': 'Brasil_Aberto',
+        'BASE_URL': 'https://brasilaberto.com/api/v1/zipcode/{}',
+        'supports_address': False,
+    },
+    'opencep': {
+        'name': 'OpenCEP',
+        'BASE_URL': 'https://opencep.com/v1/{}',
+        'supports_address': False,
+    },
+    'brasilapi': {
+        'name': 'BrasilAPI',
+        'BASE_URL': 'https://brasilapi.com.br/api/cep/v2/{}',
+        'supports_address': False,
+    },
+}
+
+
 class CepAPI:
+    available_webservices = [
+        str.lower(webservice['name'])
+        for webservice in CEP_WEBSERVICES.values()
+    ]
+
     def __init__(
         self, addresses: List[Address] = [], webservice: str = 'brasilapi'
     ):
